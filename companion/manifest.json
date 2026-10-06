@@ -1,0 +1,21 @@
+{
+	"$schema": "../node_modules/@companion-surface/base/assets/manifest.schema.json",
+	"type": "surface",
+	"id": "intech-grid",
+	"name": "Intech Studio Grid",
+	"shortname": "intech-grid",
+	"description": "Intech Studio Grid controllers (any mix of modules) as a Companion surface, over USB MIDI",
+	"version": "0.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/nisted/companion-surface-intech-grid.git",
+	"bugs": "https://github.com/nisted/companion-surface-intech-grid/issues",
+	"maintainers": [{ "name": "Nige Isted", "github": "nisted" }],
+	"runtime": {
+		"type": "node22",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../dist/main.js"
+	},
+	"keywords": ["intech", "grid", "midi", "ef44", "pbf4", "en16", "po16", "bu16", "pb44", "tek2", "vsn1", "vsn2", "octv"],
+	"products": ["Grid"],
+	"usbIds": []
+}
