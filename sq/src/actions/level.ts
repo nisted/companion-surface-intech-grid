@@ -12,7 +12,15 @@ import type { Mixer } from '../mixer/mixer.js'
 import type { Model } from '../mixer/model.js'
 import type { NRPN } from '../mixer/nrpn/nrpn.js'
 import { type Level, levelFromNRPNData } from '../mixer/level.js'
-import { DEFAULT_BAND, DEFAULT_DWELL_MS, parseNumber, pickupFor } from '../pickup.js'
+import {
+	DEFAULT_BAND,
+	DEFAULT_DWELL_MS,
+	DEFAULT_RELEASE_BAND,
+	DEFAULT_RELEASE_MS,
+	NEVER_RELEASE_BAND,
+	parseNumber,
+	pickupFor,
+} from '../pickup.js'
 import { splitNRPN } from '../mixer/nrpn/nrpn.js'
 import {
 	LevelNRPNCalculator,
@@ -283,7 +291,7 @@ export function levelActions(
 					id: 'pickup',
 					default: false,
 					tooltip:
-						"Don't change the level until the fader sits within the catch band of the desk's current level for the dwell time, then follow it. A quick sweep through doesn't latch. Show the state with the 'Grid fader pickup LED' feedback. Fader positions only.",
+						"Don't change the level until the fader sits within the catch band of the desk's current level for the dwell time, then stay latched until the desk is moved elsewhere. A quick sweep through doesn't latch. Show the state with the 'Grid fader pickup LED' feedback. Fader positions only.",
 					isVisible: (options) => options.valueType !== 'db',
 				},
 				{
@@ -302,6 +310,24 @@ export function levelActions(
 					default: String(DEFAULT_DWELL_MS),
 					useVariables: true,
 					tooltip: 'How long the fader must stay in the catch band before it takes over. A number, or a variable.',
+					isVisible: (options) => options.valueType !== 'db' && options.pickup === true,
+				},
+				{
+					type: 'textinput',
+					label: 'Release band (± fader steps, of 127)',
+					id: 'pickupReleaseBand',
+					default: String(DEFAULT_RELEASE_BAND),
+					useVariables: true,
+					tooltip: `Once latched, only a desk-side move bigger than this lets go (the fader itself never does). ${NEVER_RELEASE_BAND} = never let go. A number, or a variable.`,
+					isVisible: (options) => options.valueType !== 'db' && options.pickup === true,
+				},
+				{
+					type: 'textinput',
+					label: 'Release time (ms)',
+					id: 'pickupReleaseTime',
+					default: String(DEFAULT_RELEASE_MS),
+					useVariables: true,
+					tooltip: 'How long the desk must stay beyond the release band before it lets go. 0 = straight away. A number, or a variable.',
 					isVisible: (options) => options.valueType !== 'db' && options.pickup === true,
 				},
 			],
@@ -350,7 +376,20 @@ export function levelActions(
 						0,
 						10000,
 					)
-					if (!pickupFor(instance).handle(`${MSB}.${LSB}`, incoming, { band, dwellMs }, sendPosition)) return
+					const releaseBand = parseNumber(
+						await context.parseVariablesInString(String(options.pickupReleaseBand ?? '')),
+						DEFAULT_RELEASE_BAND,
+						0,
+						NEVER_RELEASE_BAND,
+					)
+					const releaseMs = parseNumber(
+						await context.parseVariablesInString(String(options.pickupReleaseTime ?? '')),
+						DEFAULT_RELEASE_MS,
+						0,
+						60000,
+					)
+					const settings = { band, dwellMs, releaseBand, releaseMs }
+					if (!pickupFor(instance).handle(`${MSB}.${LSB}`, incoming, settings, sendPosition)) return
 				}
 
 				send(level)

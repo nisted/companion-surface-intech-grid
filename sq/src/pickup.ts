@@ -12,14 +12,18 @@ import { type Level, nrpnDataFromLevel } from './mixer/level.js'
  *              Still nothing sent. LED: catch colour. If it stays in the band
  *              for the dwell time it latches; if it leaves first (e.g. a quick
  *              sweep through), it goes back to waiting.
- *   tracking - latched: the level follows the fader from where it is.
+ *   tracking - latched: the level follows the fader from where it is, and
+ *              stays latched whatever the fader does.
  *              LED: tracking colour, brightness by fader position.
  *
- * If the desk level is changed elsewhere while tracking, it goes back to
- * waiting.
+ * Release: only the desk being moved elsewhere (desk surface, another
+ * controller, a scene recall) breaks the latch. That's when the desk level is
+ * further than the release band from everything sent in the last
+ * ECHO_WINDOW_MS (so the SQ's own delayed replies don't count) and stays that
+ * way for the release time. Then it goes back to waiting.
  *
- * The band and dwell time are action options; the LED feedback reads the
- * values the action last used for that level, so the two always agree.
+ * The bands and times are action options; the LED feedback reads the values
+ * the action last used for that level, so the two always agree.
  */
 
 export const PICKUP_LED_FEEDBACK_ID = 'fader_pickup_led'
@@ -27,25 +31,41 @@ export const PICKUP_LED_FEEDBACK_ID = 'fader_pickup_led'
 export const DEFAULT_BAND = 3
 export const DEFAULT_DWELL_MS = 1000
 export const DEFAULT_FLASH_MS = 250
+export const DEFAULT_RELEASE_BAND = 6
+export const DEFAULT_RELEASE_MS = 0
+/** A release band this wide never releases */
+export const NEVER_RELEASE_BAND = 127
+
+export const LEVEL_THRESHOLD_FEEDBACK_ID = 'level_threshold_led'
 
 /** How often LED feedbacks are re-checked (for flashing, and desk changes made elsewhere) */
 const TICK_MS = 125
-/** How far the desk can be from anything we recently sent before we assume someone else moved it */
-const DESK_MOVED = 3
-const RECENT_SENT_COUNT = 8
+/** How long sent positions count as "ours" when the SQ echoes them back */
+const ECHO_WINDOW_MS = 1500
 
 type Phase = 'waiting' | 'dwelling' | 'tracking'
 
 export interface PickupSettings {
 	band: number
 	dwellMs: number
+	releaseBand: number
+	releaseMs: number
+}
+
+const DEFAULT_SETTINGS: PickupSettings = {
+	band: DEFAULT_BAND,
+	dwellMs: DEFAULT_DWELL_MS,
+	releaseBand: DEFAULT_RELEASE_BAND,
+	releaseMs: DEFAULT_RELEASE_MS,
 }
 
 interface PickupState {
 	phase: Phase
 	lastIn: number | undefined
 	/** Positions recently sent, to tell our own (possibly delayed) echoes from the desk being moved */
-	recentSent: number[]
+	recentSent: { position: number; at: number }[]
+	/** When the desk first went outside the release band, if it has */
+	outsideSince: number | undefined
 	dwellTimer: NodeJS.Timeout | undefined
 	settings: PickupSettings
 	/** Sends a fader position to the SQ */
@@ -102,7 +122,10 @@ export class PickupManager {
 
 	constructor(instance: sqInstance) {
 		this.#instance = instance
-		this.#tick = setInterval(() => this.#instance.checkFeedbacks(PICKUP_LED_FEEDBACK_ID), TICK_MS)
+		this.#tick = setInterval(() => {
+			for (const [key, state] of this.#states) this.#checkRelease(key, state)
+			this.#instance.checkFeedbacks(PICKUP_LED_FEEDBACK_ID, LEVEL_THRESHOLD_FEEDBACK_ID)
+		}, TICK_MS)
 	}
 
 	destroy(): void {
@@ -124,8 +147,9 @@ export class PickupManager {
 				phase: 'waiting',
 				lastIn: undefined,
 				recentSent: [],
+				outsideSince: undefined,
 				dwellTimer: undefined,
-				settings: { band: DEFAULT_BAND, dwellMs: DEFAULT_DWELL_MS },
+				settings: { ...DEFAULT_SETTINGS },
 				apply: undefined,
 			}
 			this.#states.set(key, state)
@@ -134,8 +158,38 @@ export class PickupManager {
 	}
 
 	#sent(state: PickupState, position: number): void {
-		state.recentSent.push(position)
-		if (state.recentSent.length > RECENT_SENT_COUNT) state.recentSent.shift()
+		const now = Date.now()
+		state.recentSent.push({ position, at: now })
+		// Keep the window, but always the last one sent
+		while (state.recentSent.length > 1 && now - state.recentSent[0].at > ECHO_WINDOW_MS) state.recentSent.shift()
+	}
+
+	/** While latched: release only if the desk has been moved elsewhere (see the top of this file) */
+	#checkRelease(key: string, state: PickupState): void {
+		if (state.phase !== 'tracking') return
+		const { releaseBand, releaseMs } = state.settings
+		const deskLevel = this.deskLevel(key)
+		if (deskLevel === undefined || releaseBand >= NEVER_RELEASE_BAND || state.recentSent.length === 0) {
+			state.outsideSince = undefined
+			return
+		}
+
+		const now = Date.now()
+		const desk = levelToPosition(deskLevel)
+		const ours = state.recentSent.filter((s, i) => i === state.recentSent.length - 1 || now - s.at <= ECHO_WINDOW_MS)
+		const outside = !ours.some((s) => Math.abs(s.position - desk) <= releaseBand)
+		if (!outside) {
+			state.outsideSince = undefined
+			return
+		}
+
+		state.outsideSince ??= now
+		if (now - state.outsideSince >= releaseMs) {
+			state.phase = 'waiting'
+			state.recentSent = []
+			state.outsideSince = undefined
+			this.#instance.checkFeedbacks(PICKUP_LED_FEEDBACK_ID)
+		}
 	}
 
 	#inBand(state: PickupState, key: string, position: number): boolean {
@@ -164,14 +218,8 @@ export class PickupManager {
 			// Desk level not known: nothing to compare with, so just follow
 			this.#stopDwell(state)
 			state.phase = 'tracking'
-		} else if (state.phase === 'tracking') {
-			const desk = levelToPosition(deskLevel)
-			const tolerance = Math.max(DESK_MOVED, settings.band)
-			if (![...state.recentSent, incoming].some((p) => Math.abs(p - desk) <= tolerance)) {
-				// Moved elsewhere (desk surface, another controller, a scene recall)
-				state.phase = 'waiting'
-				state.recentSent = []
-			}
+		} else {
+			this.#checkRelease(key, state)
 		}
 
 		if (state.phase !== 'tracking') {
@@ -204,6 +252,7 @@ export class PickupManager {
 				// Latch, and start from where the fader is
 				state.phase = 'tracking'
 				state.recentSent = []
+				state.outsideSince = undefined
 				this.#sent(state, state.lastIn)
 				state.apply?.(state.lastIn)
 			}

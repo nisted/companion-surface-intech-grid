@@ -41,5 +41,7 @@ export const typeToMuteFeedback: Record<InputOutputType, MuteFeedbackId> = {
 /** All feedback IDs. */
 export const PickupLedFeedbackId = 'fader_pickup_led' as const
 
+export const LevelThresholdFeedbackId = 'level_threshold_led' as const
+
 /** All feedback IDs. */
-export type FeedbackId = MuteFeedbackId | typeof PickupLedFeedbackId
+export type FeedbackId = MuteFeedbackId | typeof PickupLedFeedbackId | typeof LevelThresholdFeedbackId

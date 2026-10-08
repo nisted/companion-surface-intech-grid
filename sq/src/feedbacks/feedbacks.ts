@@ -1,6 +1,12 @@
 import { combineRgb, type CompanionFeedbackDefinition, type DropdownChoice } from '@companion-module/base'
 import type { Choices } from '../choices.js'
-import { type FeedbackDefinitions, type FeedbackId, MuteFeedbackId, PickupLedFeedbackId } from './feedback-ids.js'
+import {
+	type FeedbackDefinitions,
+	type FeedbackId,
+	LevelThresholdFeedbackId,
+	MuteFeedbackId,
+	PickupLedFeedbackId,
+} from './feedback-ids.js'
 import type { sqInstance } from '../instance.js'
 import { getLevelType, sourceSinkOptions } from '../actions/level.js'
 import { splitNRPN } from '../mixer/nrpn/nrpn.js'
@@ -140,6 +146,72 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 					case 'tracking':
 						return { bgcolor: scaleColour(parseColour(await text('trackingColour'), combineRgb(255, 255, 255)), position / 127) }
 				}
+			},
+		},
+		[LevelThresholdFeedbackId]: {
+			type: 'advanced',
+			name: 'Level at or above threshold LED',
+			description:
+				"Background colour while a channel's level is at or above a dB threshold. One threshold each: add it several times for several bands (Companion's feedback order decides which wins).",
+			options: [
+				...sourceSinkOptions('Input channel', 'inputChannels', 'Mix', 'mixesAndLR', choices),
+				{
+					type: 'textinput',
+					label: 'Threshold (dB, or -inf)',
+					id: 'threshold',
+					default: '0',
+					useVariables: true,
+				},
+				{
+					type: 'textinput',
+					label: 'Colour',
+					id: 'colour',
+					default: '#0000ff',
+					useVariables: true,
+					tooltip: '#0000ff, 0,0,255, or a variable',
+				},
+				{
+					type: 'checkbox',
+					label: 'Flash',
+					id: 'flash',
+					default: false,
+				},
+				{
+					type: 'textinput',
+					label: 'Flash speed (ms per on/off)',
+					id: 'flashMs',
+					default: String(DEFAULT_FLASH_MS),
+					useVariables: true,
+				},
+				{
+					type: 'textinput',
+					label: 'Flash off colour (blank = show what is underneath)',
+					id: 'offColour',
+					default: '',
+					useVariables: true,
+				},
+			],
+			callback: async ({ options }, context) => {
+				const levelType = getLevelType(instance, mixer.model, options, ['inputChannel', 'mix-or-lr'])
+				if (levelType === null) return {}
+				const { MSB, LSB } = splitNRPN(levelType.nrpn)
+				const text = async (id: string) => (await context.parseVariablesInString(String(options[id] ?? ''))).trim()
+
+				const level = pickupFor(instance).deskLevel(`${MSB}.${LSB}`)
+				if (level === undefined) return {}
+				const numeric = level === '-inf' ? -90 : level
+				const thresholdText = (await text('threshold')).toLowerCase()
+				const threshold = thresholdText === '-inf' ? -90 : parseNumber(thresholdText, 0, -90, 10)
+				if (numeric < threshold) return {}
+
+				if (options.flash === true) {
+					const flashMs = parseNumber(await text('flashMs'), DEFAULT_FLASH_MS, 50, 5000)
+					if (Math.floor(Date.now() / flashMs) % 2 === 1) {
+						const off = await text('offColour')
+						return off === '' ? {} : { bgcolor: parseColour(off, combineRgb(0, 0, 0)) }
+					}
+				}
+				return { bgcolor: parseColour(await text('colour'), combineRgb(0, 0, 255)) }
 			},
 		},
 	}

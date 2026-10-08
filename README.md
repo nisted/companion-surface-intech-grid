@@ -14,7 +14,7 @@ Structure and MIDI handling are based on [bitfocus/companion-surface-midi](https
 
 ## Patched Allen & Heath SQ module (`sq/`)
 
-`sq/` is the official [companion-module-allenheath-sq](https://github.com/bitfocus/companion-module-allenheath-sq) v3.1.0 (MIT), versioned `3.1.1-grid.4`, with one added action: **Fader channel level to mix (from value/variable)**, with an optional pickup mode (latches after the fader dwells in a catch band around the desk level; band and dwell configurable or from variables), plus a **Grid fader pickup LED** feedback with configurable colours. It sets a channel's level from a number or variable — either a fader position 0–127 (mapped along the SQ's own fader taper, so a Grid fader and the SQ fader line up) or a dB value.
+`sq/` is the official [companion-module-allenheath-sq](https://github.com/bitfocus/companion-module-allenheath-sq) v3.1.0 (MIT), versioned `3.1.1-grid.5`, with one added action: **Fader channel level to mix (from value/variable)**, with an optional pickup mode (catch → latch → release: latches after the fader dwells in a catch band around the desk level, stays latched until the desk is moved elsewhere beyond a release band for a release time; all configurable or from variables), plus a **Grid fader pickup LED** feedback with configurable colours and a stackable **Level at or above threshold LED** feedback. It sets a channel's level from a number or variable — either a fader position 0–127 (mapped along the SQ's own fader taper, so a Grid fader and the SQ fader line up) or a dB value.
 
 ## Downloads
 
