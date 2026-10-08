@@ -4,7 +4,7 @@ import { type FeedbackDefinitions, type FeedbackId, MuteFeedbackId, PickupLedFee
 import type { sqInstance } from '../instance.js'
 import { getLevelType, sourceSinkOptions } from '../actions/level.js'
 import { splitNRPN } from '../mixer/nrpn/nrpn.js'
-import { pickupFor } from '../pickup.js'
+import { DEFAULT_FLASH_MS, parseColour, parseNumber, pickupFor, scaleColour } from '../pickup.js'
 import type { Mixer } from '../mixer/mixer.js'
 import type { InputOutputType } from '../mixer/model.js'
 import { calculateMuteNRPN } from '../mixer/nrpn/mute.js'
@@ -53,7 +53,7 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 			type: 'advanced',
 			name: 'Grid fader pickup LED',
 			description:
-				'Background colour for a fader using pickup mode: flashing red below the desk level, solid red above, green while catching, then white by fader position',
+				'Background colour for a fader using pickup mode. Colours can be typed (#ff0000 or 255,0,0) or come from a variable.',
 			options: [
 				...sourceSinkOptions('Input channel', 'inputChannels', 'Mix', 'mixesAndLR', choices),
 				{
@@ -63,15 +63,83 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 					default: '',
 					useVariables: true,
 				},
+				{
+					type: 'textinput',
+					label: 'Below desk level: colour',
+					id: 'belowColour',
+					default: '#ff0000',
+					useVariables: true,
+					tooltip: 'Colour while the fader is below the desk level',
+				},
+				{
+					type: 'checkbox',
+					label: 'Below desk level: flash',
+					id: 'belowFlash',
+					default: true,
+				},
+				{
+					type: 'textinput',
+					label: 'Above desk level: colour',
+					id: 'aboveColour',
+					default: '#ff0000',
+					useVariables: true,
+					tooltip: 'Colour while the fader is above the desk level',
+				},
+				{
+					type: 'checkbox',
+					label: 'Above desk level: flash',
+					id: 'aboveFlash',
+					default: false,
+				},
+				{
+					type: 'textinput',
+					label: 'Catching: colour',
+					id: 'catchColour',
+					default: '#00ff00',
+					useVariables: true,
+					tooltip: 'Colour while the fader is in the catch band, before it latches',
+				},
+				{
+					type: 'textinput',
+					label: 'Tracking: colour',
+					id: 'trackingColour',
+					default: '#ffffff',
+					useVariables: true,
+					tooltip: 'Colour once latched; brightness follows the fader, off at 0, full at 127',
+				},
+				{
+					type: 'textinput',
+					label: 'Flash speed (ms per on/off)',
+					id: 'flashMs',
+					default: String(DEFAULT_FLASH_MS),
+					useVariables: true,
+				},
 			],
 			callback: async ({ options }, context) => {
 				const levelType = getLevelType(instance, mixer.model, options, ['inputChannel', 'mix-or-lr'])
 				if (levelType === null) return {}
 				const { MSB, LSB } = splitNRPN(levelType.nrpn)
-				const raw = (await context.parseVariablesInString(String(options.value ?? ''))).trim()
+				const text = async (id: string) => (await context.parseVariablesInString(String(options[id] ?? ''))).trim()
+
+				const raw = await text('value')
 				const n = Number(raw)
 				const incoming = raw === '' || Number.isNaN(n) ? undefined : n
-				return { bgcolor: pickupFor(instance).ledColour(`${MSB}.${LSB}`, incoming) }
+				const { led, position } = pickupFor(instance).ledState(`${MSB}.${LSB}`, incoming)
+
+				const flashMs = parseNumber(await text('flashMs'), DEFAULT_FLASH_MS, 50, 5000)
+				const flashOff = Math.floor(Date.now() / flashMs) % 2 === 1
+				const BLACK = combineRgb(0, 0, 0)
+
+				switch (led) {
+					case 'below':
+						return { bgcolor: options.belowFlash && flashOff ? BLACK : parseColour(await text('belowColour'), combineRgb(255, 0, 0)) }
+					case 'above':
+						return { bgcolor: options.aboveFlash && flashOff ? BLACK : parseColour(await text('aboveColour'), combineRgb(255, 0, 0)) }
+					case 'catch':
+						return { bgcolor: parseColour(await text('catchColour'), combineRgb(0, 255, 0)) }
+					case 'tracking':
+						return { bgcolor: scaleColour(parseColour(await text('trackingColour'), combineRgb(255, 255, 255)), position / 127) }
+				}
 			},
 		},
 	}

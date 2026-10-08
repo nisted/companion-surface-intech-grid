@@ -12,7 +12,7 @@ import type { Mixer } from '../mixer/mixer.js'
 import type { Model } from '../mixer/model.js'
 import type { NRPN } from '../mixer/nrpn/nrpn.js'
 import { type Level, levelFromNRPNData } from '../mixer/level.js'
-import { pickupFor } from '../pickup.js'
+import { DEFAULT_BAND, DEFAULT_DWELL_MS, parseNumber, pickupFor } from '../pickup.js'
 import { splitNRPN } from '../mixer/nrpn/nrpn.js'
 import {
 	LevelNRPNCalculator,
@@ -283,8 +283,26 @@ export function levelActions(
 					id: 'pickup',
 					default: false,
 					tooltip:
-						"Don't change the level until the fader reaches the desk's current level (from above or below), hold 1s, then follow it. Use the 'Grid fader pickup LED' feedback to show the state. Fader positions only.",
+						"Don't change the level until the fader sits within the catch band of the desk's current level for the dwell time, then follow it. A quick sweep through doesn't latch. Show the state with the 'Grid fader pickup LED' feedback. Fader positions only.",
 					isVisible: (options) => options.valueType !== 'db',
+				},
+				{
+					type: 'textinput',
+					label: 'Catch band (± fader steps, of 127)',
+					id: 'pickupBand',
+					default: String(DEFAULT_BAND),
+					useVariables: true,
+					tooltip: 'How close to the desk level counts as caught. A number, or a variable.',
+					isVisible: (options) => options.valueType !== 'db' && options.pickup === true,
+				},
+				{
+					type: 'textinput',
+					label: 'Dwell time (ms)',
+					id: 'pickupDwell',
+					default: String(DEFAULT_DWELL_MS),
+					useVariables: true,
+					tooltip: 'How long the fader must stay in the catch band before it takes over. A number, or a variable.',
+					isVisible: (options) => options.valueType !== 'db' && options.pickup === true,
 				},
 			],
 			callback: async ({ options }, context) => {
@@ -320,7 +338,19 @@ export function levelActions(
 						const to = valueToLevel(String(position), 'position')
 						if (to !== null) send(to)
 					}
-					if (!pickupFor(instance).handle(`${MSB}.${LSB}`, incoming, sendPosition)) return
+					const band = parseNumber(
+						await context.parseVariablesInString(String(options.pickupBand ?? '')),
+						DEFAULT_BAND,
+						0,
+						64,
+					)
+					const dwellMs = parseNumber(
+						await context.parseVariablesInString(String(options.pickupDwell ?? '')),
+						DEFAULT_DWELL_MS,
+						0,
+						10000,
+					)
+					if (!pickupFor(instance).handle(`${MSB}.${LSB}`, incoming, { band, dwellMs }, sendPosition)) return
 				}
 
 				send(level)
