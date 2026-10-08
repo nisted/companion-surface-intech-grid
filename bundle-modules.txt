@@ -1,0 +1,5 @@
+# Module packages built and put into the offline module bundle, one folder per line.
+# Each folder is a Companion module with its own package.json and a `yarn package` script.
+# To add a desk (e.g. a Yamaha DM3 module in dm3/), add its folder here.
+.
+sq
