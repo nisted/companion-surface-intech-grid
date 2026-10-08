@@ -5,6 +5,7 @@ import { getActions } from './actions/actions.js'
 import { Choices } from './choices.js'
 import { GetConfigFields, type RawConfig } from './config.js'
 import { getFeedbacks } from './feedbacks/feedbacks.js'
+import { destroyPickup } from './pickup.js'
 import { Mixer } from './mixer/mixer.js'
 import { canUpdateConfigWithoutRestarting, noConnectionConfig, validateConfig } from './config.js'
 import { getPresets } from './presets.js'
@@ -27,6 +28,7 @@ export class sqInstance extends InstanceBase<RawConfig> {
 	#lastLabel: string | null = null
 
 	override async destroy(): Promise<void> {
+		destroyPickup(this)
 		if (this.mixer !== null) {
 			this.mixer.stop('Module connection destroyed')
 			this.mixer = null
@@ -126,7 +128,7 @@ export class sqInstance extends InstanceBase<RawConfig> {
 
 		this.initVariableDefinitions(mixer)
 		this.setActionDefinitions(getActions(this, mixer, choices))
-		this.setFeedbackDefinitions(getFeedbacks(mixer, choices))
+		this.setFeedbackDefinitions(getFeedbacks(this, mixer, choices))
 
 		this.#lastLabel = this.label
 		this.setPresetDefinitions(getPresets(this, model))
