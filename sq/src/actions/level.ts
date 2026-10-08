@@ -11,7 +11,8 @@ import { LR, tryUpgradeMixOrLRArrayEncoding, tryUpgradeMixOrLROptionEncoding } f
 import type { Mixer } from '../mixer/mixer.js'
 import type { Model } from '../mixer/model.js'
 import type { NRPN } from '../mixer/nrpn/nrpn.js'
-import { type Level, levelFromNRPNData } from '../mixer/level.js'
+import { type Level, levelFromNRPNData, nrpnDataFromLevel } from '../mixer/level.js'
+import { splitNRPN } from '../mixer/nrpn/nrpn.js'
 import {
 	LevelNRPNCalculator,
 	type SinkForMixAndLRInSinkForNRPN,
@@ -58,6 +59,64 @@ function valueToLevel(raw: string, valueType: unknown): Level | null {
 	const position = Math.max(0, Math.min(127, Math.round(n)))
 	if (position === 0) return '-inf'
 	return levelFromNRPNData(position, 0, 'AudioTaper')
+}
+
+/** The 0-127 fader position of a level on the SQ's audio taper (the inverse of the 'position' mapping). */
+function levelToPosition(level: Level): number {
+	if (level === '-inf') return 0
+	const [vc, vf] = nrpnDataFromLevel(Math.max(-89.9, Math.min(10, level)), 'AudioTaper')
+	return vc + vf / 100
+}
+
+/** How close (in 0-127 position steps) counts as "at" the desk level */
+const PICKUP_TOLERANCE = 1.5
+/** How far the desk can be from anything we recently sent before we assume someone else moved it */
+const DESK_MOVED_TOLERANCE = 3
+const RECENT_SENT_COUNT = 8
+
+interface PickupState {
+	engaged: boolean
+	/** The previous incoming position, to spot the incoming fader crossing the desk level */
+	lastIn: number | undefined
+	/** Positions recently sent, to tell our own (possibly delayed) echoes from the desk being moved */
+	recentSent: number[]
+}
+
+/**
+ * Pickup (soft takeover): only let a fader take control once it reaches the
+ * desk's current level, coming from either side. Once caught it tracks
+ * normally. If the desk level is then changed elsewhere, it waits to be
+ * caught again.
+ */
+function pickupAllows(state: PickupState, incoming: number, deskLevel: Level | undefined): boolean {
+	if (deskLevel === undefined) {
+		// Desk level not known yet: nothing to compare with, so just follow
+		state.engaged = true
+	} else {
+		const desk = levelToPosition(deskLevel)
+
+		if (state.engaged) {
+			const ours = [...state.recentSent, incoming]
+			if (!ours.some((p) => Math.abs(p - desk) <= DESK_MOVED_TOLERANCE)) {
+				// Moved by someone else (desk surface, another controller, a scene recall)
+				state.engaged = false
+				state.recentSent = []
+			}
+		}
+
+		if (!state.engaged) {
+			const atDesk = Math.abs(incoming - desk) <= PICKUP_TOLERANCE
+			const crossed = state.lastIn !== undefined && Math.sign(state.lastIn - desk) !== Math.sign(incoming - desk)
+			if (atDesk || crossed) state.engaged = true
+		}
+	}
+
+	state.lastIn = incoming
+	if (state.engaged) {
+		state.recentSent.push(incoming)
+		if (state.recentSent.length > RECENT_SENT_COUNT) state.recentSent.shift()
+	}
+	return state.engaged
 }
 
 const ObsoleteFXReturnLevelinFXSendId = 'fxslev_to_fxs'
@@ -251,6 +310,9 @@ export function levelActions(
 ): ActionDefinitions<LevelActionId> {
 	const model = mixer.model
 
+	/** Pickup state per level (keyed by NRPN), kept while the connection runs */
+	const pickupStates = new Map<string, PickupState>()
+
 	return {
 		[LevelActionId.InputChannelLevelInMixOrLRFromValue]: {
 			name: 'Fader channel level to mix (from value/variable)',
@@ -274,6 +336,15 @@ export function levelActions(
 						{ id: 'db', label: 'Level in dB (-inf, or -90 to +10)' },
 					],
 				},
+				{
+					type: 'checkbox',
+					label: 'Pickup mode',
+					id: 'pickup',
+					default: false,
+					tooltip:
+						"Don't change the level until the fader reaches the desk's current level (from above or below), then follow it. Fader positions only.",
+					isVisible: (options) => options.valueType !== 'db',
+				},
 			],
 			callback: async ({ options }, context) => {
 				const levelType = getLevelType(instance, model, options, ['inputChannel', 'mix-or-lr'])
@@ -291,6 +362,19 @@ export function levelActions(
 				if (level === null) {
 					instance.log('warn', `Fader value "${raw}" isn't a number, ignoring`)
 					return
+				}
+
+				if (options.pickup === true && options.valueType !== 'db') {
+					const { MSB, LSB } = splitNRPN(levelType.nrpn)
+					const key = `${MSB}.${LSB}`
+					let state = pickupStates.get(key)
+					if (!state) pickupStates.set(key, (state = { engaged: false, lastIn: undefined, recentSent: [] }))
+
+					const current = instance.getVariableValue(`level_${key}`)
+					const deskLevel: Level | undefined =
+						current === '-inf' ? '-inf' : typeof current === 'number' ? current : undefined
+					const incoming = Math.max(0, Math.min(127, Number(raw.trim())))
+					if (!pickupAllows(state, incoming, deskLevel)) return
 				}
 
 				if (sinkType === 'lr') {
