@@ -64,7 +64,10 @@ export function buildLayout(modules: GridModule[]): GridLayout {
 	for (const { m, t } of types) {
 		const baseRow = (maxY - m.y) * cellH
 		const baseCol = (m.x - minX) * cellW
+		const prefix = modules.length > 1 ? `${t.name} (${m.x},${m.y})` : t.name
+		const counts: Partial<Record<ElementKind, number>> = {}
 		for (const el of t.elements) {
+			const number = (counts[el.kind] = (counts[el.kind] ?? 0) + 1)
 			const row = baseRow + el.row
 			const column = baseCol + el.column
 			const controlId = `${row}/${column}`
@@ -74,7 +77,7 @@ export function buildLayout(modules: GridModule[]): GridLayout {
 				variables.push({
 					id: info.variableId,
 					type: 'input',
-					name: `${t.name} (${m.x},${m.y}) ${el.kind} ${el.index} value`,
+					name: `${prefix} ${el.kind} ${number} value`,
 					description: '0-127',
 				})
 			}
