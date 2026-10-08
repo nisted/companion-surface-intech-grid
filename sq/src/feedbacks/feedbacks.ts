@@ -8,7 +8,7 @@ import {
 	PickupLedFeedbackId,
 } from './feedback-ids.js'
 import type { sqInstance } from '../instance.js'
-import { getLevelType, sourceSinkOptions } from '../actions/level.js'
+import { channelMixOptions, getLevelType, resolveChannelMix } from '../actions/level.js'
 import { splitNRPN } from '../mixer/nrpn/nrpn.js'
 import { DEFAULT_FLASH_MS, parseColour, parseNumber, pickupFor, scaleColour } from '../pickup.js'
 import type { Mixer } from '../mixer/mixer.js'
@@ -61,7 +61,7 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 			description:
 				'Background colour for a fader using pickup mode. Colours can be typed (#ff0000 or 255,0,0) or come from a variable.',
 			options: [
-				...sourceSinkOptions('Input channel', 'inputChannels', 'Mix', 'mixesAndLR', choices),
+				...channelMixOptions(choices),
 				{
 					type: 'textinput',
 					label: 'Fader value',
@@ -122,7 +122,10 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 				},
 			],
 			callback: async ({ options }, context) => {
-				const levelType = getLevelType(instance, mixer.model, options, ['inputChannel', 'mix-or-lr'])
+				const levelType = getLevelType(instance, mixer.model, await resolveChannelMix(options, context), [
+					'inputChannel',
+					'mix-or-lr',
+				])
 				if (levelType === null) return {}
 				const { MSB, LSB } = splitNRPN(levelType.nrpn)
 				const text = async (id: string) => (await context.parseVariablesInString(String(options[id] ?? ''))).trim()
@@ -150,16 +153,23 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 		},
 		[LevelThresholdFeedbackId]: {
 			type: 'advanced',
-			name: 'Level at or above threshold LED',
+			name: 'Level at target LED',
 			description:
-				"Background colour while a channel's level is at or above a dB threshold. One threshold each: add it several times for several bands (Companion's feedback order decides which wins).",
+				"Background colour while a channel's level is within a band either side of a target dB. One target each: add it several times for several targets (Companion's feedback order decides which wins).",
 			options: [
-				...sourceSinkOptions('Input channel', 'inputChannels', 'Mix', 'mixesAndLR', choices),
+				...channelMixOptions(choices),
 				{
 					type: 'textinput',
-					label: 'Threshold (dB, or -inf)',
-					id: 'threshold',
+					label: 'Target (dB, or -inf)',
+					id: 'target',
 					default: '0',
+					useVariables: true,
+				},
+				{
+					type: 'textinput',
+					label: 'Band (± dB either side of the target)',
+					id: 'targetBand',
+					default: '0.5',
 					useVariables: true,
 				},
 				{
@@ -192,7 +202,10 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 				},
 			],
 			callback: async ({ options }, context) => {
-				const levelType = getLevelType(instance, mixer.model, options, ['inputChannel', 'mix-or-lr'])
+				const levelType = getLevelType(instance, mixer.model, await resolveChannelMix(options, context), [
+					'inputChannel',
+					'mix-or-lr',
+				])
 				if (levelType === null) return {}
 				const { MSB, LSB } = splitNRPN(levelType.nrpn)
 				const text = async (id: string) => (await context.parseVariablesInString(String(options[id] ?? ''))).trim()
@@ -200,9 +213,10 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 				const level = pickupFor(instance).deskLevel(`${MSB}.${LSB}`)
 				if (level === undefined) return {}
 				const numeric = level === '-inf' ? -90 : level
-				const thresholdText = (await text('threshold')).toLowerCase()
-				const threshold = thresholdText === '-inf' ? -90 : parseNumber(thresholdText, 0, -90, 10)
-				if (numeric < threshold) return {}
+				const targetText = (await text('target')).toLowerCase()
+				const target = targetText === '-inf' ? -90 : parseNumber(targetText, 0, -90, 10)
+				const band = parseNumber(await text('targetBand'), 0.5, 0, 100)
+				if (Math.abs(numeric - target) > band) return {}
 
 				if (options.flash === true) {
 					const flashMs = parseNumber(await text('flashMs'), DEFAULT_FLASH_MS, 50, 5000)

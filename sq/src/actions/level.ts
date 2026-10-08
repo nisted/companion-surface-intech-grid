@@ -1,5 +1,7 @@
 import type {
+	CompanionInputFieldCheckbox,
 	CompanionInputFieldDropdown,
+	CompanionInputFieldTextInput,
 	CompanionMigrationAction,
 	CompanionOptionValues,
 } from '@companion-module/base'
@@ -235,6 +237,66 @@ export function sourceSinkOptions(
 	]
 }
 
+const UseVariablesOptionId = 'useVars'
+const ChannelVarOptionId = 'inputVar'
+const MixVarOptionId = 'mixVar'
+
+/**
+ * Input channel and mix options for the Grid-related actions and feedbacks:
+ * the usual dropdowns, or (ticked) fields that take a typed value or a
+ * variable. Channel is 1-based, as on the desk; mix is 'LR' or a mix number.
+ */
+export function channelMixOptions(
+	choices: Choices,
+): Array<CompanionInputFieldDropdown | CompanionInputFieldCheckbox | CompanionInputFieldTextInput> {
+	const [channel, mix] = sourceSinkOptions('Input channel', 'inputChannels', 'Mix', 'mixesAndLR', choices)
+	const notVars = (options: CompanionOptionValues) => options[UseVariablesOptionId] !== true
+	const vars = (options: CompanionOptionValues) => options[UseVariablesOptionId] === true
+	return [
+		{
+			type: 'checkbox',
+			label: 'Set channel and mix from text/variables',
+			id: UseVariablesOptionId,
+			default: false,
+		},
+		{ ...channel, isVisible: notVars },
+		{ ...mix, isVisible: notVars },
+		{
+			type: 'textinput',
+			label: 'Input channel (number, e.g. 16)',
+			id: ChannelVarOptionId,
+			default: '1',
+			useVariables: true,
+			isVisible: vars,
+		},
+		{
+			type: 'textinput',
+			label: 'Mix (LR, or mix number)',
+			id: MixVarOptionId,
+			default: 'LR',
+			useVariables: true,
+			isVisible: vars,
+		},
+	]
+}
+
+/** Options with the channel and mix filled in from the text/variable fields, if those are in use */
+export async function resolveChannelMix(
+	options: CompanionOptionValues,
+	context: { parseVariablesInString(text: string): Promise<string> },
+): Promise<CompanionOptionValues> {
+	if (options[UseVariablesOptionId] !== true) return options
+	const channelText = (await context.parseVariablesInString(String(options[ChannelVarOptionId] ?? ''))).trim()
+	const mixText = (await context.parseVariablesInString(String(options[MixVarOptionId] ?? ''))).trim()
+	const channel = Number(channelText.replace(/^ch\s*/i, ''))
+	const mixNumber = Number(mixText.replace(/^(mix|aux)\s*/i, ''))
+	return {
+		...options,
+		[LevelSetSourceOptionId]: Number.isInteger(channel) && channel >= 1 ? channel - 1 : NaN,
+		[LevelSetSinkOptionId]: /^lr$/i.test(mixText) ? LR : Number.isInteger(mixNumber) && mixNumber >= 1 ? mixNumber - 1 : NaN,
+	}
+}
+
 /**
  * Generate action definitions for setting the levels of sources in sinks: input
  * channels in mixes, mixes in LR, and so on and so forth.
@@ -267,7 +329,7 @@ export function levelActions(
 			name: 'Fader channel level to mix (from value/variable)',
 			description: 'Sets the level from a number or variable, e.g. an Intech Grid fader value',
 			options: [
-				...sourceSinkOptions('Input channel', 'inputChannels', 'Mix', 'mixesAndLR', choices),
+				...channelMixOptions(choices),
 				{
 					type: 'textinput',
 					label: 'Value',
@@ -332,7 +394,10 @@ export function levelActions(
 				},
 			],
 			callback: async ({ options }, context) => {
-				const levelType = getLevelType(instance, model, options, ['inputChannel', 'mix-or-lr'])
+				const levelType = getLevelType(instance, model, await resolveChannelMix(options, context), [
+					'inputChannel',
+					'mix-or-lr',
+				])
 				if (levelType === null) {
 					return
 				}
