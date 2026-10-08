@@ -106,6 +106,17 @@ const GridPlugin: SurfacePlugin<GridPortInfo> = {
 							min: 1,
 							max: 32,
 						},
+						{
+							id: 'valueIntervalMs',
+							type: 'number',
+							label: 'Fader value update interval (ms)',
+							description:
+								'Fader/pot value variables update at most this often; the final position is always sent. ' +
+								"Companion runs a variable trigger at most every 50 ms, so above 50 avoids its 'Rate limited' warning. 0 = every change.",
+							default: 60,
+							min: 0,
+							max: 1000,
+						},
 					],
 				},
 			}

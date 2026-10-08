@@ -39,6 +39,10 @@ export class GridSurface implements SurfaceInstance {
 	readonly #carry = new Map<string, number>()
 	#brightness = 100
 	#faderStep = 1
+	/** Minimum gap between fader value updates per variable (0 = every change) */
+	#valueIntervalMs = 60
+	readonly #valueLastSent = new Map<string, number>()
+	readonly #valuePending = new Map<string, { value: number; timer: NodeJS.Timeout }>()
 	#checkTimer: NodeJS.Timeout | undefined
 
 	readonly #onSysex = (bytes: Buffer) => this.#handleSysex(bytes)
@@ -77,6 +81,8 @@ export class GridSurface implements SurfaceInstance {
 
 	async close(): Promise<void> {
 		if (this.#checkTimer) clearInterval(this.#checkTimer)
+		for (const pending of this.#valuePending.values()) clearTimeout(pending.timer)
+		this.#valuePending.clear()
 		this.#input.off('sysex', this.#onSysex)
 		await this.blank().catch(() => null)
 		for (const port of [this.#input, this.#output]) {
@@ -92,6 +98,36 @@ export class GridSurface implements SurfaceInstance {
 	async updateConfig(config: Record<string, any>): Promise<void> {
 		const step = Number(config?.faderStep)
 		this.#faderStep = Number.isFinite(step) && step >= 1 ? Math.round(step) : 1
+		const interval = Number(config?.valueIntervalMs)
+		this.#valueIntervalMs = Number.isFinite(interval) && interval >= 0 ? Math.round(interval) : 60
+	}
+
+	/**
+	 * Send a fader value variable, at most once per #valueIntervalMs, always
+	 * finishing with the latest value. Keeps triggers on the variable under
+	 * Companion's rate limit without losing where the fader stopped.
+	 */
+	#sendValue(variableId: string, value: number): void {
+		const pending = this.#valuePending.get(variableId)
+		if (pending) {
+			pending.value = value
+			return
+		}
+		const wait = (this.#valueLastSent.get(variableId) ?? 0) + this.#valueIntervalMs - Date.now()
+		if (wait <= 0) {
+			this.#valueLastSent.set(variableId, Date.now())
+			this.#context.sendVariableValue(variableId, value)
+			return
+		}
+		const entry = {
+			value,
+			timer: setTimeout(() => {
+				this.#valuePending.delete(variableId)
+				this.#valueLastSent.set(variableId, Date.now())
+				this.#context.sendVariableValue(variableId, entry.value)
+			}, wait),
+		}
+		this.#valuePending.set(variableId, entry)
 	}
 
 	async ready(): Promise<void> {}
@@ -166,7 +202,7 @@ export class GridSurface implements SurfaceInstance {
 	}
 
 	#absolute(info: ControlInfo, value: number): void {
-		if (info.variableId) this.#context.sendVariableValue(info.variableId, value)
+		if (info.variableId) this.#sendValue(info.variableId, value)
 
 		const last = this.#lastAbsolute.get(info.controlId)
 		this.#lastAbsolute.set(info.controlId, value)
