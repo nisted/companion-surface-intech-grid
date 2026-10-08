@@ -61,7 +61,7 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 			description:
 				'Background colour for a fader using pickup mode. Colours can be typed (#ff0000 or 255,0,0) or come from a variable.',
 			options: [
-				...channelMixOptions(choices),
+				...channelMixOptions(),
 				{
 					type: 'textinput',
 					label: 'Fader value',
@@ -122,10 +122,9 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 				},
 			],
 			callback: async ({ options }, context) => {
-				const levelType = getLevelType(instance, mixer.model, await resolveChannelMix(options, context), [
-					'inputChannel',
-					'mix-or-lr',
-				])
+				const resolved = await resolveChannelMix(instance, options, context)
+				if (resolved === null) return {}
+				const levelType = getLevelType(instance, mixer.model, resolved, ['inputChannel', 'mix-or-lr'])
 				if (levelType === null) return {}
 				const { MSB, LSB } = splitNRPN(levelType.nrpn)
 				const text = async (id: string) => (await context.parseVariablesInString(String(options[id] ?? ''))).trim()
@@ -157,7 +156,7 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 			description:
 				"Background colour while a channel's level is within a band either side of a target dB. One target each: add it several times for several targets (Companion's feedback order decides which wins).",
 			options: [
-				...channelMixOptions(choices),
+				...channelMixOptions(),
 				{
 					type: 'textinput',
 					label: 'Target (dB, or -inf)',
@@ -202,10 +201,9 @@ export function getFeedbacks(instance: sqInstance, mixer: Mixer, choices: Choice
 				},
 			],
 			callback: async ({ options }, context) => {
-				const levelType = getLevelType(instance, mixer.model, await resolveChannelMix(options, context), [
-					'inputChannel',
-					'mix-or-lr',
-				])
+				const resolved = await resolveChannelMix(instance, options, context)
+				if (resolved === null) return {}
+				const levelType = getLevelType(instance, mixer.model, resolved, ['inputChannel', 'mix-or-lr'])
 				if (levelType === null) return {}
 				const { MSB, LSB } = splitNRPN(levelType.nrpn)
 				const text = async (id: string) => (await context.parseVariablesInString(String(options[id] ?? ''))).trim()

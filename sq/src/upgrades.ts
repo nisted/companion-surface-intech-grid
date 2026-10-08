@@ -5,7 +5,12 @@ import {
 	type CompanionUpgradeContext,
 	EmptyUpgradeScript,
 } from '@companion-module/base'
-import { tryFixFXRLevelInFXSIdTypo } from './actions/level.js'
+import {
+	GridLevelFeedbackIds,
+	tryFixFXRLevelInFXSIdTypo,
+	tryMoveGridChannelMixToText,
+	tryUpgradeGridLevelAction,
+} from './actions/level.js'
 import {
 	tryConvertOldLevelToOutputActionToSinkSpecific,
 	tryConvertOldPanToOutputActionToSinkSpecific,
@@ -28,6 +33,18 @@ function ActionUpdater(
 			updatedActions: props.actions.filter(tryUpdate),
 			updatedConfig: null,
 			updatedFeedbacks: [],
+		}
+	}
+}
+
+function GridUpdater(): CompanionStaticUpgradeScript<RawConfig> {
+	return (_context: CompanionUpgradeContext<RawConfig>, props: CompanionStaticUpgradeProps<RawConfig>) => {
+		return {
+			updatedActions: props.actions.filter(tryUpgradeGridLevelAction),
+			updatedConfig: null,
+			updatedFeedbacks: props.feedbacks.filter(
+				(f) => GridLevelFeedbackIds.includes(f.feedbackId) && tryMoveGridChannelMixToText(f),
+			),
 		}
 	}
 }
@@ -57,4 +74,6 @@ export const UpgradeScripts = [
 	ActionUpdater(tryUpdateAllLRMixEncodings),
 	ActionUpdater(tryFixFXRLevelInFXSIdTypo),
 	ConfigUpdater(tryRenameVariousConfigIds),
+	// Grid (nisted fork): channel/mix dropdowns -> text boxes that take variables
+	GridUpdater(),
 ] satisfies CompanionStaticUpgradeScript<RawConfig>[]
