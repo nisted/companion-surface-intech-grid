@@ -36,11 +36,16 @@ jobs:
       - name: Combine into one offline module bundle
         run: |
           set -e
-          mkdir -p work bundle/nige-modules
-          for pkg in *.tgz sq/*.tgz; do
-            rm -rf work/* && tar -xzf "$pkg" -C work
-            id=$(node -p "require('./work/pkg/companion/manifest.json').id")
-            mv work/pkg "bundle/nige-modules/$id"
+          mkdir -p bundle/nige-modules
+          echo "::notice::Packages found: $(ls *.tgz sq/*.tgz 2>&1 | tr '\n' ' ')"
+          for pkg in $(ls *.tgz sq/*.tgz); do
+            echo "::notice::Adding $pkg"
+            rm -rf work && mkdir work && tar -xzf "$pkg" -C work
+            manifest=$(find work -maxdepth 3 -path '*/companion/manifest.json' | head -1)
+            [ -n "$manifest" ] || { echo "::error::No manifest in $pkg: $(tar -tzf "$pkg" | head -5 | tr '\n' ' ')"; exit 1; }
+            root=$(dirname "$(dirname "$manifest")")
+            id=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1])).id)" "$manifest")
+            mv "$root" "bundle/nige-modules/$id"
           done
           ls bundle/nige-modules
           tar -czf companion-nige-modules-bundle.tgz -C bundle nige-modules
