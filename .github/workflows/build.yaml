@@ -4,6 +4,7 @@ on:
   push:
     branches: ['**']
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -21,55 +22,19 @@ jobs:
         with:
           node-version: 22.x
       - run: corepack enable
-
-      - name: Build module packages
-        run: |
-          set -e
-          mkdir -p out
-          for dir in $(grep -v '^\s*#' bundle-modules.txt | grep -v '^\s*$'); do
-            echo "::group::Building $dir"
-            (cd "$dir" && yarn install --no-immutable && yarn package)
-            cp "$dir"/*.tgz out/
-            echo "::endgroup::"
-          done
-          echo "::notice::Packages: $(ls out | tr '\n' ' ')"
-
-      - name: Make offline module bundle
-        run: |
-          set -e
-          name="companion-nige-modules-bundle-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
-          mkdir -p "bundle/$name"
-          for pkg in out/*.tgz; do
-            rm -rf work && mkdir work && tar -xzf "$pkg" -C work
-            manifest=$(find work -maxdepth 3 -path '*/companion/manifest.json' | head -1)
-            root=$(dirname "$(dirname "$manifest")")
-            id=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1])).id)" "$manifest")
-            mv "$root" "bundle/$name/$id"
-          done
-          mkdir -p bundle-out
-          tar -czf "bundle-out/$name.tgz" -C bundle "$name"
-          python3 tools/check-bundle.py "bundle-out/$name.tgz" > bundle-check.txt
-          echo "::notice::Bundle contents: $(tr '\n' ';' < bundle-check.txt)"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: companion-nige-modules
-          path: out/*.tgz
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: companion-nige-modules-bundle
-          path: bundle-out/*.tgz
-          if-no-files-found: error
-
+      - run: yarn install --no-immutable
+      - run: yarn package
       - name: Lint (informational)
         run: yarn lint || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-surface-intech-grid
+          path: '*.tgz'
+          if-no-files-found: error
 
       - name: Attach to release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            out/*.tgz
-            bundle-out/*.tgz
+          files: '*.tgz'

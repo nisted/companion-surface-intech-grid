@@ -1,28 +1,17 @@
 # companion-surface-intech-grid
 
-Bitfocus Companion 5 surface module for Intech Studio Grid controllers, over USB MIDI.
+Bitfocus Companion 5 surface module for Intech Studio Grid controllers (any mix of modules: EF44, PBF4, EN16,
+PO16, BU16, PB44, TEK2, VSN1, VSN2, TEK1, OCTV), over USB MIDI. See [HELP.md](./companion/HELP.md) for
+setup and use, and [LICENSE](./LICENSE).
 
-- `src/` — the Companion surface module (TypeScript, `@companion-surface/base` 1.3)
-- `grid/companion-setup.lua` — script to paste into each Grid module's System → Setup event
-- `companion/HELP.md` — user help shown in Companion
+## Development
 
-Build: push to GitHub; the **Build** workflow produces `companion-surface-intech-grid-*.tgz` as an artifact (and attaches it to a release for `v*` tags). In Companion: Modules → **Import module package** → choose the .tgz, then add the Intech Studio Grid surface integration.
+`corepack enable && yarn install`, then `yarn build` (or `yarn dev` to rebuild on change). `yarn package`
+makes the `.tgz` that Companion imports (Modules → Import module package). The Build workflow on GitHub does
+the same on every push and attaches the package to a release for `v*` tags.
 
-Local build: `corepack enable && yarn install && yarn package`.
+- `src/` — the surface module (`@companion-surface/base` 1.3)
+- `grid/companion-setup.lua` — the script each Grid module runs (also printed in HELP.md)
 
-Structure and MIDI handling are based on [bitfocus/companion-surface-midi](https://github.com/bitfocus/companion-surface-midi) (MIT). Grid element and hardware tables come from Intech Studio's grid-protocol and grid-firmware.
-
-## Patched Allen & Heath SQ module (`sq/`)
-
-`sq/` is the official [companion-module-allenheath-sq](https://github.com/bitfocus/companion-module-allenheath-sq) v3.1.0 (MIT), versioned `3.1.1-grid.7`, with one added action: **Fader channel level to mix (from value/variable)**, with an optional pickup mode (catch → latch → release: latches after the fader dwells in a catch band around the desk level, stays latched until the desk is moved elsewhere beyond a release band for a release time; all configurable or from variables), plus a **Grid fader pickup LED** feedback with configurable colours and a stackable **Level at target LED** feedback (target dB ± band); channel and mix are text boxes that take a number or a variable (existing buttons and triggers are upgraded automatically). It sets a channel's level from a number or variable — either a fader position 0–127 (mapped along the SQ's own fader taper, so a Grid fader and the SQ fader line up) or a dB value.
-
-## Downloads
-
-The Build workflow publishes two artifacts:
-
-- **companion-nige-modules-bundle** — one `.tgz` holding every module listed in `bundle-modules.txt`. In Companion: Modules → **Import offline module bundle**. Companion installs each module version it doesn't already have and skips ones it does (so bump a module's version when you change it).
-- **companion-nige-modules** — the same modules as separate packages. In Companion: Modules → **Import module package**, one `.tgz` at a time.
-
-Use the bundle with **Import offline module bundle** only: given to **Import module package**, Companion rejects it with "Doesn't look like a valid module, missing manifest", because that option expects a single module with `companion/manifest.json` at the top of the archive.
-
-To add another desk module: put it in its own folder with a `package.json` and `yarn package` script, and add the folder to `bundle-modules.txt`.
+Structure and MIDI handling are based on [bitfocus/companion-surface-midi](https://github.com/bitfocus/companion-surface-midi)
+(MIT). Grid element and hardware tables come from Intech Studio's grid-protocol and grid-firmware.
