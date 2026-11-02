@@ -117,6 +117,14 @@ const GridPlugin: SurfacePlugin<GridPortInfo> = {
 							min: 0,
 							max: 1000,
 						},
+						{
+							id: 'crew',
+							type: 'static-text',
+							label: "Psst. This one's got mates. 🍹",
+							value:
+								"Intech Grid is part of a little crew of Companion modules: some brand new, some old favourites given a good tweak. Want to know who else is in the crew, or grab the freshest version of each one? It's all here: " +
+								'https://github.com/nisted/companion-modules',
+						},
 					],
 				},
 			}

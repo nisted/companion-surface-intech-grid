@@ -54,3 +54,7 @@ To make the Grid follow the same page as a Stream Deck, put both in the same **s
 - Adding, removing or moving a module makes the surface reconnect with the new layout.
 - Layouts for modules other than EF44 are based on Intech's element lists; the arrangement inside a module may not match the panel exactly.
 - Requires Companion 5.0.
+
+### Psst. This one's got mates. 🍹
+
+Intech Grid is part of a little crew of Companion modules: some brand new, some old favourites given a good tweak. Want to know who else is in the crew, or grab the freshest version of each one? It's all here: [github.com/nisted/companion-modules](https://github.com/nisted/companion-modules)
