@@ -72,7 +72,7 @@ const GridPlugin: SurfacePlugin<GridPortInfo> = {
 		try {
 			const inIndex = inputNames().indexOf(info.inputName)
 			const outIndex = outputNames().indexOf(info.outputName)
-			if (inIndex < 0 || outIndex < 0) throw new Error('Grid MIDI port not found')
+			if (inIndex < 0 || outIndex < 0) throw new Error("Can't find the Grid's MIDI port. Is it still plugged in?")
 			input.ignoreTypes(false, true, true) // let SysEx through
 			input.openPort(inIndex)
 			output.openPort(outIndex)
@@ -80,8 +80,8 @@ const GridPlugin: SurfacePlugin<GridPortInfo> = {
 			const modules = await discoverModules(input, output)
 			if (modules.length === 0) {
 				throw new Error(
-					'No Grid modules answered. Add the Companion setup script to each module (see the module help), ' +
-						'and close Grid Editor or anything else using the Grid MIDI port.',
+					"No Grid modules answered. Has each module got the Companion setup script (it's in the module help)? " +
+						'Also close Grid Editor or anything else using the Grid MIDI port, then try again.',
 				)
 			}
 			const layout = buildLayout(modules)
@@ -100,8 +100,8 @@ const GridPlugin: SurfacePlugin<GridPortInfo> = {
 							type: 'number',
 							label: 'Fader/pot movement per rotate step',
 							description:
-								'Faders and pots fire a rotate left/right on their button as they move (0-127 over full travel). ' +
-								'1 = every step; higher = fewer, coarser steps.',
+								'As faders and pots move, they fire rotate left/right on their button (0-127 over full travel). ' +
+								'1 = every step. Higher = fewer, coarser steps, handy if things feel a bit twitchy.',
 							default: 1,
 							min: 1,
 							max: 32,
@@ -111,8 +111,8 @@ const GridPlugin: SurfacePlugin<GridPortInfo> = {
 							type: 'number',
 							label: 'Fader value update interval (ms)',
 							description:
-								'Fader/pot value variables update at most this often; the final position is always sent. ' +
-								"Companion runs a variable trigger at most every 50 ms, so above 50 avoids its 'Rate limited' warning. 0 = every change.",
+								"How often the fader/pot value variables update, at most. Don't worry, the final position always gets sent. " +
+								"Companion runs a variable trigger at most every 50 ms, so anything above 50 keeps its 'Rate limited' warning quiet. 0 = every change.",
 							default: 60,
 							min: 0,
 							max: 1000,

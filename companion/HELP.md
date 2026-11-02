@@ -1,8 +1,8 @@
 # Intech Studio Grid
 
-Turns a Grid controller — any mix of modules (EF44, PBF4, EN16, PO16, BU16, PB44, TEK2, VSN1, VSN2, TEK1, OCTV) — into one Companion surface over USB MIDI. Companion lays the modules out the way they are chained, and each control is a normal Companion button, so it follows pages like a Stream Deck.
+Plug in a Grid controller, any mix of modules you like (EF44, PBF4, EN16, PO16, BU16, PB44, TEK2, VSN1, VSN2, TEK1, OCTV), and it becomes one Companion surface over USB MIDI. Companion lays the modules out the way you've chained them. Every control is a normal Companion button, so it follows pages just like a Stream Deck does. Lovely.
 
-## What each control does
+## What each bit does
 
 | Grid control | In Companion |
 | --- | --- |
@@ -11,20 +11,20 @@ Turns a Grid controller — any mix of modules (EF44, PBF4, EN16, PO16, BU16, PB
 | Fader or pot | Rotate left/right as it moves, **and** its 0-127 value as a surface variable |
 | LED | Shows the button's background colour |
 
-Rotate actions only fire if the button has **Enable rotary actions** ticked.
+One thing to remember: rotate actions only fire if the button has **Enable rotary actions** ticked.
 
-Fader values appear in the surface's settings as variables (one per fader/pot) which you can link to a custom variable. The **Fader/pot movement per rotate step** setting makes faders coarser (e.g. 8 = 16 steps over full travel).
+Each fader and pot also gets its own variable in the surface's settings, and you can link that to a custom variable. Want faders a bit less twitchy? Turn up **Fader/pot movement per rotate step** to make them coarser (e.g. 8 = 16 steps over full travel).
 
-## Setting up the Grid (once per module)
+## Getting the Grid ready (once per module)
 
 1. In Grid Editor, reset the module to its default configuration (the default profile).
 2. Select the module's **System** element (the utility button) and open its **Setup** event.
 3. Add a **Code** block and paste in the script below.
 4. **Store** the configuration.
 5. Repeat for every module in the chain.
-6. Close Grid Editor — the Grid's MIDI port can only be used by one program at a time on Windows. Also remove any Generic MIDI connection in Companion that used the Grid.
+6. Close Grid Editor. On Windows, only one program can use the Grid's MIDI port at a time, and it doesn't like sharing. Also remove any Generic MIDI connection in Companion that used the Grid.
 
-The script makes each module announce its type and position, send its controls to Companion, and take LED colours back. It relies on each element's default actions, so leave those in place.
+What the script does: each module says what it is and where it sits, sends its controls to Companion, and takes LED colours back. It leans on each element's default actions, so leave those where they are.
 
 ### The setup script
 
@@ -47,13 +47,13 @@ CGH()
 
 ## Linking with a Stream Deck
 
-To make the Grid follow the same page as a Stream Deck, put both in the same **surface group** in Companion's Surfaces tab.
+Want the Grid and a Stream Deck on the same page together? Put both in the same **surface group** in Companion's Surfaces tab. Done.
 
-## Notes
+## Good to know
 
-- Adding, removing or moving a module makes the surface reconnect with the new layout.
-- Layouts for modules other than EF44 are based on Intech's element lists; the arrangement inside a module may not match the panel exactly.
-- Requires Companion 5.0.
+- Add, remove or move a module and the surface reconnects with the new layout on its own.
+- Layouts for modules other than EF44 come from Intech's element lists, so the arrangement inside a module might not match the panel exactly. Worth a quick check before the show.
+- You'll need Companion 5.0.
 
 ### Psst. This one's got mates. 🍹
 
